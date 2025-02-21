@@ -111,6 +111,17 @@ class MotionPlanning(Drone):
         data = msgpack.dumps(self.waypoints)
         self.connection._master.write(data)
 
+    def prune_path(path):
+        pruned = [path[0]]
+        for i in range(1, len(path)-1):
+        # Check if points are collinear
+            p1, p2, p3 = pruned[-1], path[i], path[i+1]
+            collinear = (p2[0]-p1[0])*(p3[1]-p2[1]) == (p3[0]-p2[0])*(p2[1]-p1[1])
+            if not collinear:
+                pruned.append(path[i])
+        pruned.append(path[-1])
+        return pruned
+
     def plan_path(self):
         self.flight_state = States.PLANNING
         print("Searching for a path ...")
@@ -118,12 +129,23 @@ class MotionPlanning(Drone):
         SAFETY_DISTANCE = 5
 
         self.target_position[2] = TARGET_ALTITUDE
+    
+
+   
 
         # TODO: read lat0, lon0 from colliders into floating point values
+        with open('colliders.csv') as f:
+         first_line = f.readline().strip().split(',')
+         lat0 = float(first_line[0].split()[1])
+         lon0 = float(first_line[1].split()[1])
+         self.set_home_position(lon0, lat0, 0)
         
         # TODO: set home position to (lon0, lat0, 0)
 
         # TODO: retrieve current global position
+        current_global_pos = (self._longitude, self._latitude, self._altitude)
+        current_local_pos = global_to_local(current_global_pos, self.global_home)
+        grid_start = (int(current_local_pos[0]), int(current_local_pos[1]))
  
         # TODO: convert to current local position using global_to_local()
         
@@ -142,6 +164,9 @@ class MotionPlanning(Drone):
         # Set goal as some arbitrary position on the grid
         grid_goal = (-north_offset + 10, -east_offset + 10)
         # TODO: adapt to set goal as latitude / longitude position and convert
+        goal_global = (-122.4000, 37.7960, 0)  # Replace with your desired coordinates
+        goal_local = global_to_local(goal_global, self.global_home)
+        grid_goal = (int(goal_local[0]), int(goal_local[1]))
 
         # Run A* to find a path from start to goal
         # TODO: add diagonal motions with a cost of sqrt(2) to your A* implementation
@@ -149,6 +174,8 @@ class MotionPlanning(Drone):
         print('Local Start and Goal: ', grid_start, grid_goal)
         path, _ = a_star(grid, heuristic, grid_start, grid_goal)
         # TODO: prune path to minimize number of waypoints
+        pruned = prune_path(path)
+
         # TODO (if you're feeling ambitious): Try a different approach altogether!
 
         # Convert path to waypoints
